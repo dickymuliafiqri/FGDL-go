@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -13,31 +15,43 @@ import (
 
 var (
 	home, _     = os.UserHomeDir()
-	downloadDir = home + "/Downloads"
+	downloadDir = filepath.Join(home, "Downloads")
 	url         = ""
+
+	osPlatform = runtime.GOOS
 )
 
 func main() {
 	fmt.Print("Input FF URL: ")
 	fmt.Scan(&url)
 
-	//
-	downloadID := strings.Split(url, "#")[1]
-	downloadDir = downloadDir + "/" + downloadID
-	if _, err := os.Stat(downloadDir); os.IsNotExist(err) {
-		os.MkdirAll(downloadDir, 0777)
+	// Specify download dir for each os
+	switch osPlatform {
+	case "darwin", "linux":
+		downloadID := strings.Split(url, "#")[1]
+		downloadDir = filepath.Join(downloadDir, downloadID)
+		if _, err := os.Stat(downloadDir); os.IsNotExist(err) {
+			os.MkdirAll(downloadDir, 0777)
+		}
 	}
 
-	pref := fmt.Sprintf(`{
-		"download": {
-		  "default_directory": "%s"
-		}
-	}`, downloadDir)
-
+	fmt.Printf("Download dir: %s\n", downloadDir)
 	fmt.Println("Spawning chromium...")
-	l := launcher.New().Preferences(pref).Headless(true)
+
+	profileDir := filepath.Join(os.TempDir(), "rod-profile")
+	l := launcher.New().
+		Set("download.default_directory", downloadDir).
+		Set("savefile.default_directory", downloadDir).
+		Set("safebrowsing-disable-download-protection", "true").
+		Set("download.prompt_for_download", "false").
+		Set("disable-popup-blocking", "true").
+		Set("user-data-dir", profileDir).
+		Headless(false)
 	u := l.MustLaunch()
 	page := rod.New().ControlURL(u).MustConnect().MustPage(url)
+
+	defer l.Cleanup()
+	defer page.Browser().Close()
 
 	// Wait for page
 	page.MustWaitStable()
@@ -83,7 +97,7 @@ func main() {
 		for {
 			downloadSize := isDownloadActive()
 			currentSize := humanize.Bytes(uint64(downloadSize))
-			fmt.Println(fmt.Sprintf("%s: %s", filename, humanize.Bytes(uint64(downloadSize))))
+			fmt.Printf("%s: %s\n", filename, humanize.Bytes(uint64(downloadSize)))
 
 			if downloadSize < 1 {
 				break
@@ -138,7 +152,7 @@ func isDownloadActive() int64 {
 
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), "download") {
-			if fileInfo, err := file.Info(); err == nil {
+			if fileInfo, err := os.Stat(filepath.Join(downloadDir, file.Name())); err == nil {
 				return fileInfo.Size()
 			}
 			return 1
@@ -156,7 +170,7 @@ func deleteDownloads() {
 
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), "download") {
-			if err := os.Remove(downloadDir + "/" + file.Name()); err != nil {
+			if err := os.Remove(filepath.Join(downloadDir, file.Name())); err != nil {
 				panic(err)
 			}
 		}
