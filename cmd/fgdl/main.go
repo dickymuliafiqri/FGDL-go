@@ -46,7 +46,7 @@ func main() {
 		Set("download.prompt_for_download", "false").
 		Set("disable-popup-blocking", "true").
 		Set("user-data-dir", profileDir).
-		Headless(false)
+		Headless(true)
 	u := l.MustLaunch()
 	page := rod.New().ControlURL(u).MustConnect().MustPage(url)
 
