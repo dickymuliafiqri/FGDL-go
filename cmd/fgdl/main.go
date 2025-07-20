@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,9 +19,10 @@ import (
 
 var (
 	home, _           = os.UserHomeDir()
-	downloadDir       = filepath.Join(home, "Downloads")
+	downloadDir       = ""
 	url               = ""
 	downloadLinkRegex = regexp.MustCompile(`window\.open\("(.+)"\)`)
+	pathRegex         = regexp.MustCompile(`['"\n]`)
 )
 
 func main() {
@@ -47,11 +49,23 @@ func main() {
                                                                                                                               
                                                                                                                               
 by. dickymuliafiqri - awokwokwokwokwokwo                                                                                      `)
-	fmt.Print("Input FF URL: ")
-	fmt.Scan(&url)
 
-	downloadID := strings.Split(url, "#")[1]
-	downloadDir = filepath.Join(downloadDir, downloadID)
+	scanner := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Input FF URL: ")
+	url, _ = scanner.ReadString('\n')
+
+	fmt.Printf("Input Download Dir (Blank for Default): ")
+	downloadDir, _ = scanner.ReadString('\n')
+
+	if downloadDir == "" {
+		downloadID := strings.Split(url, "#")[1]
+		downloadDir = filepath.Join(filepath.Join(home, "Downloads"), downloadID)
+	} else {
+		downloadDir = pathRegex.ReplaceAllString(downloadDir, "")
+	}
+	downloadDir = filepath.Clean(downloadDir)
+
 	if _, err := os.Stat(downloadDir); os.IsNotExist(err) {
 		os.MkdirAll(downloadDir, 0777)
 	}
