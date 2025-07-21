@@ -22,7 +22,7 @@ var (
 	downloadDir       = ""
 	url               = ""
 	downloadLinkRegex = regexp.MustCompile(`window\.open\("(.+)"\)`)
-	pathRegex         = regexp.MustCompile(`['"\n]`)
+	pathRegex         = regexp.MustCompile(`['"\n\\]`)
 )
 
 func main() {
@@ -63,6 +63,9 @@ by. dickymuliafiqri - awokwokwokwokwokwo                                        
 		downloadDir = filepath.Join(filepath.Join(home, "Downloads"), downloadID)
 	} else {
 		downloadDir = pathRegex.ReplaceAllString(downloadDir, "")
+	}
+	if string(downloadDir[len(downloadDir)-1]) == " " {
+		downloadDir = downloadDir[:len(downloadDir)-1]
 	}
 	downloadDir = filepath.Clean(downloadDir)
 
