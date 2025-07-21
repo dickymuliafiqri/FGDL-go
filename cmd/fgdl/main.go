@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,14 +59,14 @@ by. dickymuliafiqri - awokwokwokwokwokwo                                        
 	fmt.Printf("Input Download Dir (Blank for Default): ")
 	downloadDir, _ = scanner.ReadString('\n')
 
-	if downloadDir == "" {
+	if len(downloadDir) < 2 {
 		downloadID := strings.Split(url, "#")[1]
 		downloadDir = filepath.Join(filepath.Join(home, "Downloads"), downloadID)
 	} else {
 		downloadDir = pathRegex.ReplaceAllString(downloadDir, "")
-	}
-	if string(downloadDir[len(downloadDir)-1]) == " " {
-		downloadDir = downloadDir[:len(downloadDir)-1]
+		if string(downloadDir[len(downloadDir)-1]) == " " {
+			downloadDir = downloadDir[:len(downloadDir)-1]
+		}
 	}
 	downloadDir = filepath.Clean(downloadDir)
 
@@ -87,7 +88,7 @@ by. dickymuliafiqri - awokwokwokwokwokwo                                        
 
 	// Get download links
 	fmt.Println("Accessing download links...")
-	links := strings.SplitSeq(page.MustElement("#plaintext > ul:nth-child(2)").MustText(), "\n")
+	links := strings.Split(page.MustElement("#plaintext > ul:nth-child(2)").MustText(), "\n")
 
 	// Close browser
 	page.Browser().Close()
@@ -96,7 +97,55 @@ by. dickymuliafiqri - awokwokwokwokwokwo                                        
 	// Delete obsoleted downloads
 	deleteDownloads()
 
-	for link := range links {
+	// Download list
+	var downloadIndexes = make([]int, len(links))
+	for i := range links {
+		downloadIndexes[i] = i
+	}
+
+	for {
+		for index, link := range links {
+			if slices.Contains(downloadIndexes, index) {
+				fmt.Printf("[+] %d. %s\n", index, strings.Split(link, "#")[1])
+			} else {
+				fmt.Printf("[-] %d. %s\n", index, strings.Split(link, "#")[1])
+			}
+		}
+
+		var selectIndex = 0
+
+		fmt.Printf("Select number to switch, type '30035' to start: ")
+		fmt.Scan(&selectIndex)
+
+		if selectIndex == 30035 {
+			break
+		} else {
+			if selectIndex > len(links)-1 {
+				fmt.Println("Index out of range")
+			} else {
+				if slices.Contains(downloadIndexes, selectIndex) {
+					newS := []int{}
+					for _, i := range downloadIndexes {
+						if i != selectIndex {
+							newS = append(newS, i)
+						}
+					}
+					downloadIndexes = newS
+				} else {
+					downloadIndexes = append(downloadIndexes, selectIndex)
+				}
+			}
+		}
+		fmt.Println("")
+	}
+
+	fmt.Printf("\n\nStarting download...\n")
+
+	for index, link := range links {
+		if !slices.Contains(downloadIndexes, index) {
+			continue
+		}
+
 		func() {
 			fmt.Printf("[+] URL: %s\n", link)
 
