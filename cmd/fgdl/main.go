@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -19,11 +20,12 @@ import (
 )
 
 var (
+	runningOs         = runtime.GOOS
 	home, _           = os.UserHomeDir()
 	downloadDir       = ""
 	url               = ""
 	downloadLinkRegex = regexp.MustCompile(`window\.open\("(.+)"\)`)
-	pathRegex         = regexp.MustCompile(`['"\n\\]`)
+	pathRegex         = regexp.MustCompile(`['"\n]`)
 )
 
 func main() {
@@ -59,10 +61,14 @@ by. dickymuliafiqri - awokwokwokwokwokwo                                        
 	fmt.Printf("Input Download Dir (Blank for Default): ")
 	downloadDir, _ = scanner.ReadString('\n')
 
-	if len(downloadDir) < 2 {
+	if len(downloadDir) < 5 {
 		downloadID := strings.Split(url, "#")[1]
 		downloadDir = filepath.Join(filepath.Join(home, "Downloads"), downloadID)
 	} else {
+		switch runningOs {
+		case "darwin", "linux":
+			downloadDir = strings.ReplaceAll(downloadDir, "\\", "")
+		}
 		downloadDir = pathRegex.ReplaceAllString(downloadDir, "")
 		if string(downloadDir[len(downloadDir)-1]) == " " {
 			downloadDir = downloadDir[:len(downloadDir)-1]
