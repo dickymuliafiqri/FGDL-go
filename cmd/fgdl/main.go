@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -82,6 +83,9 @@ func main() {
 	}
 
 	for {
+		fmt.Println("Select which file to download...")
+		fmt.Println("")
+		clearScreen()
 		for index, link := range links {
 			if slices.Contains(downloadIndexes, index) {
 				fmt.Printf("[+] %d. %s\n", index, strings.Split(link, "#")[1])
@@ -92,7 +96,8 @@ func main() {
 
 		var selectIndex = 0
 
-		fmt.Printf("Select number to switch, type '30035' to start: ")
+		fmt.Println("")
+		fmt.Printf("Input number to switch, type '30035' to start: ")
 		fmt.Scan(&selectIndex)
 
 		if selectIndex == 30035 {
@@ -258,4 +263,17 @@ func ensureWindowsLongPath(p string) string {
 		return `\\?\UNC` + p[1:]
 	}
 	return `\\?\` + p
+}
+
+func clearScreen() {
+	switch runtime.GOOS {
+	case "windows":
+		cmd := exec.Command("cmd", "/c", "cls")
+		cmd.Stdout = os.Stdout
+		_ = cmd.Run()
+	default:
+		cmd := exec.Command("clear")
+		cmd.Stdout = os.Stdout
+		_ = cmd.Run()
+	}
 }
