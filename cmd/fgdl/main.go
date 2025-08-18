@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,39 +21,13 @@ import (
 )
 
 var (
-	runningOs         = runtime.GOOS
 	home, _           = os.UserHomeDir()
 	downloadDir       = ""
 	url               = ""
 	downloadLinkRegex = regexp.MustCompile(`window\.open\("(.+)"\)`)
-	pathRegex         = regexp.MustCompile(`['"\n]`)
 )
 
 func main() {
-	fmt.Println(`
- ███████████ ███  █████              ███          ████                                                                        
-░░███░░░░░░█░░░  ░░███              ░░░          ░░███                                                                        
- ░███   █ ░ ████ ███████    ███████ ████ ████████ ░███                                                                        
- ░███████  ░░███░░░███░    ███░░███░░███░░███░░███░███                                                                        
- ░███░░░█   ░███  ░███    ░███ ░███ ░███ ░███ ░░░ ░███                                                                        
- ░███  ░    ░███  ░███ ███░███ ░███ ░███ ░███     ░███                                                                        
- █████      █████ ░░█████ ░░███████ ██████████    █████                                                                       
-░░░░░      ░░░░░   ░░░░░   ░░░░░███░░░░░░░░░░    ░░░░░                                                                        
-                           ███ ░███                                                                                           
-                          ░░██████                                                                                            
-                           ░░░░░░                                                                                             
- ███████████ ███████████    ██████████                                    ████                        █████                   
-░░███░░░░░░█░░███░░░░░░█   ░░███░░░░███                                  ░░███                       ░░███                    
- ░███   █ ░  ░███   █ ░     ░███   ░░███  ██████  █████ ███ █████████████ ░███   ██████  ██████    ███████   ██████  ████████ 
- ░███████    ░███████       ░███    ░███ ███░░███░░███ ░███░░███░░███░░███░███  ███░░███░░░░░███  ███░░███  ███░░███░░███░░███
- ░███░░░█    ░███░░░█       ░███    ░███░███ ░███ ░███ ░███ ░███ ░███ ░███░███ ░███ ░███ ███████ ░███ ░███ ░███████  ░███ ░░░ 
- ░███  ░     ░███  ░        ░███    ███ ░███ ░███ ░░███████████  ░███ ░███░███ ░███ ░██████░░███ ░███ ░███ ░███░░░   ░███     
- █████       █████          ██████████  ░░██████   ░░████░████   ████ █████████░░██████░░████████░░████████░░██████  █████    
-░░░░░       ░░░░░          ░░░░░░░░░░    ░░░░░░     ░░░░ ░░░░   ░░░░ ░░░░░░░░░  ░░░░░░  ░░░░░░░░  ░░░░░░░░  ░░░░░░  ░░░░░     
-                                                                                                                              
-                                                                                                                              
-by. dickymuliafiqri - awokwokwokwokwokwo                                                                                      `)
-
 	scanner := bufio.NewReader(os.Stdin)
 
 	fmt.Print("Input FF URL: ")
@@ -64,17 +39,14 @@ by. dickymuliafiqri - awokwokwokwokwokwo                                        
 	if len(downloadDir) < 5 {
 		downloadID := strings.Split(url, "#")[1]
 		downloadDir = filepath.Join(filepath.Join(home, "Downloads"), downloadID)
-	} else {
-		switch runningOs {
-		case "darwin", "linux":
-			downloadDir = strings.ReplaceAll(downloadDir, "\\", "")
-		}
-		downloadDir = pathRegex.ReplaceAllString(downloadDir, "")
-		if string(downloadDir[len(downloadDir)-1]) == " " {
-			downloadDir = downloadDir[:len(downloadDir)-1]
-		}
 	}
-	downloadDir = filepath.Clean(downloadDir)
+
+	if norm, err := normalizeDroppedPath(downloadDir); err == nil {
+		downloadDir = norm
+	} else {
+		fmt.Printf("Failed to resolve download dir: %s", err)
+		os.Exit(1)
+	}
 
 	if _, err := os.Stat(downloadDir); os.IsNotExist(err) {
 		os.MkdirAll(downloadDir, 0777)
@@ -232,4 +204,58 @@ func deleteDownloads() {
 			}
 		}
 	}
+}
+
+func normalizeDroppedPath(p string) (string, error) {
+	if p == "" {
+		return "", errors.New("path empty")
+	}
+
+	p = strings.TrimSpace(p)
+	p = trimOuterQuotes(p)
+
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", fmt.Errorf("abs: %w", err)
+	}
+	abs = filepath.Clean(abs)
+
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = resolved
+	}
+
+	info, err := os.Stat(abs)
+	if !os.IsNotExist(err) {
+		if err != nil {
+			return "", fmt.Errorf("stat: %w", err)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("not a folder: %s", abs)
+		}
+	}
+
+	if runtime.GOOS == "windows" {
+		abs = ensureWindowsLongPath(abs)
+	}
+
+	return abs, nil
+}
+
+func trimOuterQuotes(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}
+
+func ensureWindowsLongPath(p string) string {
+	if strings.HasPrefix(p, `\\?\`) || strings.HasPrefix(p, `\\?\UNC\`) {
+		return p
+	}
+	if strings.HasPrefix(p, `\\`) {
+		return `\\?\UNC` + p[1:]
+	}
+	return `\\?\` + p
 }
